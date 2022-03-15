@@ -1,0 +1,45 @@
+[project]
+name = "nonebot-plugin-wordle"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "iyume", email = "iyumelive@gmail.com"},
+]
+dependencies = [
+    "nonebot2>=2.0.0b1",
+    "nonebot-adapter-onebot>=2.0.0b1",
+    "Pillow>=8.4.0",
+]
+requires-python = ">=3.7.3"
+license = {text = "MIT"}
+readme = "README.md"
+keywords = ["nonebot", "onebot", "wordle"]
+
+[project.urls]
+homepage = "https://github.com/iyume/nonebot-plugin-wordle"
+repository = "https://github.com/iyume/nonebot-plugin-wordle"
+documentation = "https://github.com/iyume/nonebot-plugin-wordle/blob/master/README.md"
+
+[project.optional-dependencies]
+# place extra deps here
+
+[tool.pdm]
+editable-backend = "editables"
+
+[tool.pdm.dev-dependencies]
+dev = [
+    "mypy>=0.931",
+    "black>=22.1.0",
+    "pipdeptree>=2.2.1",
+    "types-Pillow>=9.0.6",
+]
+
+[tool.black]
+line-length = 88
+
+[tool.isort]
+profile = "black"
+
+[build-system]
+requires = ["pdm-pep517"]
+build-backend = "pdm.pep517.api"
