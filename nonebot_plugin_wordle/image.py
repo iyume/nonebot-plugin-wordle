@@ -1,11 +1,11 @@
 import itertools
 from pathlib import Path
 from typing import (
-    Callable,
     Generic,
     Iterable,
     List,
     Literal,
+    Optional,
     Tuple,
     TypeVar,
     Union,
@@ -18,36 +18,11 @@ from .util import im2base64
 
 T = TypeVar("T")
 
+FONT_NAME = str(Path(__file__).parent / "assets" / "ClearSans-Bold.ttf")
 
-class Point:
-    __slots__ = ("x", "y", "forward_offset")
-
-    def __init__(
-        self, x: int, y: int, *, forward_offset: Tuple[int, int] = None
-    ) -> None:
-        self.x = x
-        self.y = y
-        self.forward_offset = forward_offset
-
-    @property
-    def tuple_(self) -> Tuple[int, int]:
-        return (self.x, self.y)
-
-    @property
-    def tuplepair(self) -> Tuple[Tuple[int, int], Tuple[int, int]]:
-        if self.forward_offset is None:
-            raise RuntimeError
-        return (
-            (self.x, self.y),
-            (self.x + self.forward_offset[0], self.y + self.forward_offset[1]),
-        )
-
-    def shift(self, x: int = 0, y: int = 0) -> None:
-        self.x += x
-        self.y += y
-
-    def __repr__(self) -> str:
-        return f"{self.__class__.__name__}({self.x}, {self.y})"
+clearsans_bold_13 = ImageFont.truetype(FONT_NAME, 13)
+clearsans_bold_16 = ImageFont.truetype(FONT_NAME, 16)
+clearsans_bold_32 = ImageFont.truetype(FONT_NAME, 32)
 
 
 class NDArray(Generic[T]):
@@ -62,7 +37,7 @@ class NDArray(Generic[T]):
         self._shape = shape
 
     @classmethod
-    def from_iterable(cls, object: Iterable[Iterable[T]]) -> "NDArray":
+    def from_iterable(cls, object: Iterable[Iterable[T]]) -> "NDArray[T]":
         # Validation
         data = [list(i) for i in object]
         if data:
@@ -74,6 +49,10 @@ class NDArray(Generic[T]):
         return NDArray(
             (x for y in data for x in y), (len(data), len(data[0]) if data else 0)
         )
+
+    @property
+    def flat(self) -> Iterable[T]:
+        yield from self.data
 
     @property
     def shape(self) -> Tuple[int, int]:
@@ -89,6 +68,14 @@ class NDArray(Generic[T]):
                 f"cannot reshape array of size {self.size} into shape ({x},{y})"
             )
         self._shape = (x, y)
+
+    def append(self, other: Union["NDArray[T]", Iterable[Iterable[T]]]) -> None:
+        if not isinstance(other, NDArray):
+            other = NDArray.from_iterable(other)
+        if self.shape[1] != other.shape[1]:
+            raise ValueError("append 2D array with different column length")
+        self.data.append(*other.data)
+        self.reshape(self.shape[0] + other.shape[0], self.shape[1])
 
     def aslist(self) -> List[List[T]]:
         lst = iter(self.data)
@@ -134,7 +121,7 @@ class NDArray(Generic[T]):
         ...
 
     @overload
-    def __getitem__(self, __k: Tuple[slice, slice]) -> "NDArray":
+    def __getitem__(self, __k: Tuple[slice, slice]) -> "NDArray[T]":
         ...
 
     @overload
@@ -150,8 +137,7 @@ class NDArray(Generic[T]):
             Tuple[slice, slice],
             Tuple[int, int],
         ],
-    ) -> Union[T, List[T], "NDArray"]:
-        """Return Lists, not array object."""
+    ) -> Union[T, List[T], "NDArray[T]"]:
         if isinstance(__k, int):
             # return self.data[__k].copy()
             if not (0 <= __k < self.shape[0]):
@@ -204,25 +190,6 @@ class NDArray(Generic[T]):
             raise IndexError(f"2D array index {__k} is invalid")
 
 
-def getbasewordle(tilesize: int = 50) -> Image.Image:
-    """Place empty 5 x 6 tile within 5px gap."""
-    im = Image.new("RGB", (5 * tilesize + 21, 6 * tilesize + 26), color="#ffffff")
-    # additional 1px to right and bottom to suit line weight
-    draw = ImageDraw.Draw(im)
-    start_xy = Point(0, 0)
-    end_xy = Point(tilesize, tilesize)
-    for i in range(6):
-        for j in range(5):
-            draw.rectangle((start_xy.tuple_, end_xy.tuple_), outline="#d3d6da", width=2)
-            start_xy.shift(x=55)
-            end_xy.shift(x=55)
-        start_xy.x = 0
-        end_xy.x = 50
-        start_xy.shift(y=55)
-        end_xy.shift(y=55)
-    return im
-
-
 class IMWordle:
     """Draw wordle in flexible.
 
@@ -230,69 +197,90 @@ class IMWordle:
     the code is written in size-flexible instead of resize the image.
 
     Args:
-        tilesize: Word tile size in wordle.
+        tilesize: word tile size in wordle.
     """
 
-    FONT = ImageFont.truetype(
-        str(Path(__file__).parent / "assets" / "ClearSans-Regular.ttf")
-    )
-
-    words: Iterable[str]
+    answer: str
     tilesize: int
-    wordle_size: Tuple[int, int]
-    sidebar_size: Tuple[int, int]
-    debug: bool
-    im: Image.Image
-    imdraw: ImageDraw.ImageDraw
+    current_gameboard: Optional[Image.Image]
+    current_keyboard: Optional[Image.Image]
 
-    def __init__(
-        self,
-        inputs: Tuple[str, ...],
-        answer: str,
-        tilesize: int = 50,
-        debug: bool = True,
-    ) -> None:
-        # Don't make the draw session interactive
-        self.words = itertools.chain.from_iterable(inputs)
+    def __init__(self, answer: str, *, tilesize: int = 62) -> None:
         self.answer = answer
         self.tilesize = tilesize
-        self.debug = debug
-        self.wordle_size = (5 * tilesize + 21, 6 * tilesize + 26)  # Default 271 x 326
-        """5 x 6 tile within 5px gap, addition 1px to suit line weight."""
-        self.sidebar_size = (
-            self.wordle_size[1] - self.wordle_size[0],
-            self.wordle_size[1],
-        )  # make output square
-        self.im = Image.new("RGB", self.wordle_size, color="#ffffff")
-        self.imdraw = ImageDraw.Draw(self.im)
-        self.current_point = Point(0, 0, forward_offset=(self.tilesize, self.tilesize))
+        self.current_gameboard = None
+        self.current_keyboard = None
 
-    def _draw(self, char: str = None, fill: str = None) -> None:
-        if char is None:
-            return
-        if self.debug:
-            self.im.save("debug.png")
-        if len(char) != 1:
-            raise RuntimeError
+    def get_tiles(self, words: Iterable[Union[str, None]]) -> Iterable[Image.Image]:
+        imempty = Image.new("RGB", (self.tilesize, self.tilesize), color="white")
+        ImageDraw.Draw(imempty).rectangle(
+            ((0, 0), (self.tilesize - 1, self.tilesize - 1)), outline="#d3d6da", width=2
+        )
+        iter_alpha = iter(words)
+        index = 0
+        while True:
+            try:
+                alpha = next(iter_alpha)
+                alpha_val = self.answer[index % 5]
+                index += 1
+            except StopIteration:
+                return
+            else:
+                if alpha is None or alpha == "0":
+                    yield imempty
+                    continue
+                im = Image.new("RGB", (self.tilesize, self.tilesize), color="white")
+                imdraw = ImageDraw.Draw(im)
+                if alpha == alpha_val:
+                    fill = "#6aaa64"
+                elif alpha in self.answer:
+                    fill = "#c9b458"
+                else:
+                    fill = "#787c7e"
+                imdraw.rectangle(
+                    ((0, 0), (self.tilesize - 1, self.tilesize - 1)),
+                    fill=fill,
+                )
+                # alpha is upper, so not need to calculate its true height
+                # just give anchor "mm"
+                imdraw.text(
+                    (self.tilesize / 2, self.tilesize / 2),
+                    alpha.upper(),
+                    font=clearsans_bold_32,
+                    anchor="mm",
+                )
+                yield im
 
-    def move(self) -> None:
-        ...
-
-    def drawleave(self, move: Callable[[], None]) -> None:
+    @overload
+    def draw(self, words: List[str], base64: Literal[False]) -> Image.Image:
         ...
 
     @overload
-    def draw(self, base64: Literal[False]) -> Image.Image:
+    def draw(self, words: List[str], base64: Literal[True] = True) -> str:
         ...
 
-    @overload
-    def draw(self, base64: Literal[True] = True) -> str:
-        ...
-
-    def draw(self, base64: bool = True) -> Union[Image.Image, str]:
-        for word in self.words:
+    def draw(self, words: List[str], base64: bool = True) -> Union[Image.Image, str]:
+        gameboard = Image.new(
+            "RGB", (5 * self.tilesize + 20, 6 * self.tilesize + 25), color="white"
+        )
+        alpha_arr = NDArray.from_iterable(words)
+        for index, im in enumerate(
+            self.get_tiles(
+                itertools.chain(
+                    alpha_arr.flat, itertools.repeat(None, 30 - alpha_arr.size)
+                )
+            )
+        ):
+            x, y = index % 5, index // 5
+            gameboard.paste(im, (x * (self.tilesize + 5), y * (self.tilesize + 5)))
+        keyboard = Image.new("RGB", (484, 190))
+        for word in words:
             ...
         # Combine and add margin
         if base64:
-            return im2base64(self.im)
-        return self.im
+            return im2base64(gameboard)
+        return gameboard
+
+
+painter = IMWordle("world")
+painter.draw(["alice", "would"], base64=False).save("debug.png")
