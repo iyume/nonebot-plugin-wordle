@@ -62,6 +62,9 @@ class NDArray(Generic[T]):
     def size(self) -> int:
         return self._shape[0] * self._shape[1]
 
+    def copy(self) -> "NDArray[T]":
+        return NDArray(self.data, shape=self.shape)
+
     def reshape(self, x: int, y: int) -> None:
         if x * y != self.size:
             raise ValueError(
@@ -76,6 +79,12 @@ class NDArray(Generic[T]):
             raise ValueError("append 2D array with different column length")
         self.data.append(*other.data)
         self.reshape(self.shape[0] + other.shape[0], self.shape[1])
+
+    def enumerate(self) -> Iterable[Tuple[Tuple[int, int], T]]:
+        lst = iter(self.data)
+        for y in range(self.shape[0]):
+            for x in range(self.shape[1]):
+                yield (x, y), next(lst)
 
     def aslist(self) -> List[List[T]]:
         lst = iter(self.data)
@@ -191,13 +200,16 @@ class NDArray(Generic[T]):
 
 
 class IMWordle:
-    """Draw wordle in flexible.
+    """Painter for wordle game.
 
-    Considering the gap between tiles should be absolute,
-    the code is written in size-flexible instead of resize the image.
+    This create flexible image of wordle gameboard by given `tilesize` parameter.
+
+    The gameboard is composed using tiles with absolute gap(5px).
+    The keyboard is fixed size(500x200).
 
     Args:
-        tilesize: word tile size in wordle.
+        answer: wordle game answer
+        tilesize: tile size in wordle gameboard, give 62 is equal to give (62,62)
     """
 
     answer: str
@@ -211,16 +223,16 @@ class IMWordle:
         self.current_gameboard = None
         self.current_keyboard = None
 
-    def get_tiles(self, words: Iterable[Union[str, None]]) -> Iterable[Image.Image]:
+    def get_tiles(self, chars: Iterable[Union[str, None]]) -> Iterable[Image.Image]:
         imempty = Image.new("RGB", (self.tilesize, self.tilesize), color="white")
         ImageDraw.Draw(imempty).rectangle(
             ((0, 0), (self.tilesize - 1, self.tilesize - 1)), outline="#d3d6da", width=2
         )
-        iter_alpha = iter(words)
+        itor_alpha = iter(chars)
         index = 0
         while True:
             try:
-                alpha = next(iter_alpha)
+                alpha = next(itor_alpha)
                 alpha_val = self.answer[index % 5]
                 index += 1
             except StopIteration:
@@ -263,17 +275,21 @@ class IMWordle:
         gameboard = Image.new(
             "RGB", (5 * self.tilesize + 20, 6 * self.tilesize + 25), color="white"
         )
+        self.current_gameboard = gameboard
         alpha_arr = NDArray.from_iterable(words)
-        for index, im in enumerate(
+        for index, im in NDArray(
             self.get_tiles(
                 itertools.chain(
                     alpha_arr.flat, itertools.repeat(None, 30 - alpha_arr.size)
                 )
+            ),
+            shape=(6, 5),
+        ).enumerate():
+            gameboard.paste(
+                im, (index[0] * (self.tilesize + 5), index[1] * (self.tilesize + 5))
             )
-        ):
-            x, y = index % 5, index // 5
-            gameboard.paste(im, (x * (self.tilesize + 5), y * (self.tilesize + 5)))
-        keyboard = Image.new("RGB", (484, 190))
+        keyboard = Image.new("RGB", (500, 200))
+        self.current_keyboard = keyboard
         for word in words:
             ...
         # Combine and add margin
