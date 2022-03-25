@@ -12,7 +12,7 @@ from typing import (
     overload,
 )
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 from .util import im2base64
 
@@ -28,7 +28,9 @@ clearsans_bold_32 = ImageFont.truetype(FONT_NAME, 32)
 class NDArray(Generic[T]):
     """Implement 2D array. (for fun ^^)"""
 
-    def __init__(self, object: Iterable[T], shape: Tuple[int, int] = None) -> None:
+    def __init__(
+        self, object: Iterable[T], shape: Optional[Tuple[int, int]] = None
+    ) -> None:
         self.data = list(object)
         if shape is None:
             shape = (len(self.data), 1)
@@ -38,6 +40,7 @@ class NDArray(Generic[T]):
 
     @classmethod
     def from_iterable(cls, object: Iterable[Iterable[T]]) -> "NDArray[T]":
+        """Only for convenience."""
         # Validation
         data = [list(i) for i in object]
         if data:
@@ -65,12 +68,13 @@ class NDArray(Generic[T]):
     def copy(self) -> "NDArray[T]":
         return NDArray(self.data, shape=self.shape)
 
-    def reshape(self, x: int, y: int) -> None:
+    def reshape(self, x: int, y: int) -> "NDArray[T]":
         if x * y != self.size:
             raise ValueError(
                 f"cannot reshape array of size {self.size} into shape ({x},{y})"
             )
         self._shape = (x, y)
+        return self
 
     def append(self, other: Union["NDArray[T]", Iterable[Iterable[T]]]) -> None:
         if not isinstance(other, NDArray):
@@ -156,9 +160,10 @@ class NDArray(Generic[T]):
                     self.data, __k * self.shape[1], (__k + 1) * self.shape[1]
                 )
             )
-        if not isinstance(__k, tuple):
+        try:
+            k1, k2 = __k
+        except (TypeError, ValueError):
             raise IndexError(f"2D array index {__k} is invalid")
-        k1, k2 = __k
         if isinstance(k1, int):
             # return self.data[k1][k2]
             if not (0 <= k1 < self.shape[0]):
@@ -171,7 +176,7 @@ class NDArray(Generic[T]):
                     self.data, k1 * self.shape[1], (k1 + 1) * self.shape[1]
                 )
             )[k2]
-        elif isinstance(k1, slice):
+        else:
             # return [i[k2] for i in self.data][k1]
             if isinstance(k2, int):
                 if not (0 <= k2 < self.shape[1]):
@@ -195,8 +200,6 @@ class NDArray(Generic[T]):
                 ),
                 shape=(len(range(self.shape[0])[k1]), len(range(self.shape[1])[k2])),
             )
-        else:
-            raise IndexError(f"2D array index {__k} is invalid")
 
 
 class IMWordle:
@@ -275,7 +278,6 @@ class IMWordle:
         gameboard = Image.new(
             "RGB", (5 * self.tilesize + 20, 6 * self.tilesize + 25), color="white"
         )
-        self.current_gameboard = gameboard
         alpha_arr = NDArray.from_iterable(words)
         for index, im in NDArray(
             self.get_tiles(
@@ -288,6 +290,10 @@ class IMWordle:
             gameboard.paste(
                 im, (index[0] * (self.tilesize + 5), index[1] * (self.tilesize + 5))
             )
+        gameboard = ImageOps.expand(gameboard, border=10, fill="white")
+        # if with keyboard, then expand to (500 - gameboard.size[0], ...)
+        self.current_gameboard = gameboard
+
         keyboard = Image.new("RGB", (500, 200))
         self.current_keyboard = keyboard
         for word in words:
