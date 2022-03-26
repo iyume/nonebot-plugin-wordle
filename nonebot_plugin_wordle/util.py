@@ -1,19 +1,24 @@
-import base64
 from datetime import datetime
+from functools import lru_cache
 from io import BytesIO
 
 from PIL import Image
 
 
-def im2base64(im: Image.Image) -> str:
-    """Returns `base64://encoded_data`."""
+def im2bytes(im: Image.Image, format: str = "PNG") -> bytes:
+    """Returns bytes of image."""
     buffer = BytesIO()
-    im.save(buffer, format="PNG")
-    return f"base64://{base64.b64encode(buffer.getvalue()).decode()}"
+    im.save(buffer, format=format)
+    return buffer.getvalue()
+
+
+@lru_cache(maxsize=1)
+def _get_answer(index: int) -> str:
+    from .consts import Ma
+
+    return Ma[index]
 
 
 def get_answer() -> str:
     """Get today's wordle game answer."""
-    from .consts import Ma
-
-    return Ma[(datetime.now() - datetime(2021, 6, 19)).days]
+    return _get_answer((datetime.now() - datetime(2021, 6, 19)).days)

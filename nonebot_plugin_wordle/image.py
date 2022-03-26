@@ -14,7 +14,7 @@ from typing import (
 
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
-from .util import im2base64
+from .util import get_answer, im2bytes
 
 T = TypeVar("T")
 
@@ -215,16 +215,18 @@ class IMWordle:
         tilesize: tile size in wordle gameboard, give 62 is equal to give (62,62)
     """
 
-    answer: str
     tilesize: int
     current_gameboard: Optional[Image.Image]
     current_keyboard: Optional[Image.Image]
 
-    def __init__(self, answer: str, *, tilesize: int = 62) -> None:
-        self.answer = answer
+    def __init__(self, tilesize: int = 62) -> None:
         self.tilesize = tilesize
         self.current_gameboard = None
         self.current_keyboard = None
+
+    @property
+    def answer(self) -> str:
+        return get_answer()
 
     def get_tiles(self, chars: Iterable[Union[str, None]]) -> Iterable[Image.Image]:
         imempty = Image.new("RGB", (self.tilesize, self.tilesize), color="white")
@@ -232,11 +234,12 @@ class IMWordle:
             ((0, 0), (self.tilesize - 1, self.tilesize - 1)), outline="#d3d6da", width=2
         )
         itor_alpha = iter(chars)
+        answer = self.answer
         index = 0
         while True:
             try:
                 alpha = next(itor_alpha)
-                alpha_val = self.answer[index % 5]
+                alpha_val = answer[index % 5]
                 index += 1
             except StopIteration:
                 return
@@ -248,7 +251,7 @@ class IMWordle:
                 imdraw = ImageDraw.Draw(im)
                 if alpha == alpha_val:
                     fill = "#6aaa64"
-                elif alpha in self.answer:
+                elif alpha in answer:
                     fill = "#c9b458"
                 else:
                     fill = "#787c7e"
@@ -271,10 +274,10 @@ class IMWordle:
         ...
 
     @overload
-    def draw(self, words: List[str], base64: Literal[True] = True) -> str:
+    def draw(self, words: List[str], base64: Literal[True] = True) -> bytes:
         ...
 
-    def draw(self, words: List[str], base64: bool = True) -> Union[Image.Image, str]:
+    def draw(self, words: List[str], base64: bool = True) -> Union[Image.Image, bytes]:
         gameboard = Image.new(
             "RGB", (5 * self.tilesize + 20, 6 * self.tilesize + 25), color="white"
         )
@@ -300,9 +303,5 @@ class IMWordle:
             ...
         # Combine and add margin
         if base64:
-            return im2base64(gameboard)
+            return im2bytes(gameboard)
         return gameboard
-
-
-painter = IMWordle("world")
-painter.draw(["alice", "would"], base64=False).save("debug.png")
