@@ -270,14 +270,14 @@ class IMWordle:
                 yield im
 
     @overload
-    def draw(self, words: List[str], base64: Literal[False]) -> Image.Image:
+    def draw(self, words: List[str], raw_im: Literal[False] = False) -> bytes:
         ...
 
     @overload
-    def draw(self, words: List[str], base64: Literal[True] = True) -> bytes:
+    def draw(self, words: List[str], raw_im: Literal[True]) -> Image.Image:
         ...
 
-    def draw(self, words: List[str], base64: bool = True) -> Union[Image.Image, bytes]:
+    def draw(self, words: List[str], raw_im: bool = False) -> Union[Image.Image, bytes]:
         gameboard = Image.new(
             "RGB", (5 * self.tilesize + 20, 6 * self.tilesize + 25), color="white"
         )
@@ -302,6 +302,6 @@ class IMWordle:
         for word in words:
             ...
         # Combine and add margin
-        if base64:
-            return im2bytes(gameboard)
-        return gameboard
+        if raw_im:
+            return gameboard
+        return im2bytes(gameboard)

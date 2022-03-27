@@ -1,77 +1,40 @@
 from dataclasses import dataclass
-from typing import Callable, Dict, List, Type, overload
+from datetime import date
+from typing import Dict, List
 
-from nonebot.adapters import Adapter, Bot, Event, MessageSegment
-from nonebot.exception import AdapterException, FinishedException, SkippedException
+from nonebot.adapters import Event
 from nonebot.matcher import Matcher
-from nonebot.params import Depends
 
-from .image import IMWordle
-
-
-async def _event_name(event: Event) -> str:
-    return event.get_event_name()
-
-
-def EventName() -> str:
-    return Depends(_event_name)
-
-
-async def _get_adapter_name(bot: Bot) -> str:
-    return bot.adapter.get_name()
-
-
-def AdapterName() -> str:
-    """获取 Adapter 名字。"""
-    return Depends(_get_adapter_name)
-
-
-def _generic_get_segment_class(event: Event) -> Type[MessageSegment]:
-    from importlib import import_module
-
-    adapter_module = import_module("..", event.__class__.__module__)
-    try:
-        return adapter_module.__dict__["MessageSegment"]
-    except KeyError:
-        return MessageSegment
-
-
-async def _get_segment_class(
-    event: Event, adapter_name: str = AdapterName()
-) -> Type[MessageSegment]:
-    if adapter_name == "Onebot V11":
-        from nonebot.adapters.onebot.v11 import MessageSegment
-
-        return MessageSegment
-    elif adapter_name == "":
-        ...
-    return _generic_get_segment_class(event)
-
-
-def MessageSegmentClass() -> Type[MessageSegment]:
-    """获取 Adapter 对应的 MessageSegment 类。"""
-    return Depends(_get_segment_class)
-
-
-async def _get_image_segment(adapter_name: str = AdapterName()) -> MessageSegment:
-    ...
-
-
-def ImageSegmentMethod() -> Callable[[bytes], MessageSegment]:
-    """取得 Image Segment 的构造方法。"""
-    ...
+from .util import get_answer
 
 
 @dataclass
-class Item:
+class User:
     user_id: str
     recv_words: List[str]
+    date: date
+
+    @property
+    def finished(self) -> bool:
+        return len(self.recv_words) >= 6
+
+    @property
+    def wins(self) -> bool:
+        if not self.recv_words:
+            return False
+        return self.recv_words[-1] == get_answer()
 
 
-items: Dict[str, Item] = {}
+users: Dict[str, User] = {}
 # simple database
+# or OnFocus
 
 
-async def get_current_user(matcher: Matcher, event: Event) -> IMWordle:
+async def get_current_user(matcher: Matcher, event: Event) -> User:
+    user_id = event.get_user_id()
     # implicit register
-    raise SkippedException
+    user = users.setdefault(user_id, User(user_id, [], date.today()))
+    if user.date != date.today():
+        user.date = date.today()
+        user.recv_words.clear()
+    return user
