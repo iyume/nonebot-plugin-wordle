@@ -9,7 +9,7 @@ dependencies = [
     "nonebot2>=2.0.0b1",
     "nonebot-adapter-onebot>=2.0.0b1",
     "Pillow>=8.4.0",
-    "nonebot-plugin-params @ git+https://github.com/iyume/nonebot-plugin-params.git",
+    "nonebot-plugin-params>=0.1.0",
 ]
 requires-python = ">=3.7.3"
 license = {text = "MIT"}
@@ -19,7 +19,6 @@ keywords = ["nonebot", "onebot", "wordle"]
 [project.urls]
 homepage = "https://github.com/iyume/nonebot-plugin-wordle"
 repository = "https://github.com/iyume/nonebot-plugin-wordle"
-documentation = "https://github.com/iyume/nonebot-plugin-wordle/blob/master/README.md"
 
 [project.optional-dependencies]
 # place extra deps here
