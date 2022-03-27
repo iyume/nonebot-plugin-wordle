@@ -3,7 +3,7 @@
     // venv because mypy not support PEP 582
     // see: https://github.com/python/mypy/issues/10633
     "mypy.targets": [
-        "nonebot_plugin_wordle"
+        "nonebot_plugin_wordle_daily"
     ],
     "python.formatting.provider": "black",
     // "python.formatting.blackPath": "__pypackages__/3.9/bin/black",
